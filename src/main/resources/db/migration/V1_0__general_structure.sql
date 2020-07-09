@@ -6,23 +6,29 @@ CREATE TABLE skipper.chargeback (
     id                       BIGSERIAL                      NOT NULL,
     invoice_id               CHARACTER VARYING              NOT NULL,
     payment_id               CHARACTER VARYING              NOT NULL,
+    external_id              CHARACTER VARYING              NULL,
+    retrieval_request         BOOLEAN                        NOT NULL,
     pretension_date          TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     operation_date           TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
-    amount                   BIGINT                         NOT NULL,
+    levy_amount              BIGINT                         NOT NULL,
+    body_amount              BIGINT                         NULL,
     currency                 VARCHAR(3)                     NOT NULL,
     shop_id                  CHARACTER VARYING              NOT NULL,
     chargeback_category      skipper.chargeback_category    NOT NULL,
+    provider_id              CHARACTER VARYING              NULL,
     reason_code              CHARACTER VARYING              NULL,
     rrn                      CHARACTER VARYING              NULL,
     masked_pan               CHARACTER VARYING              NULL,
     shop_url                 CHARACTER VARYING              NULL,
     party_email              CHARACTER VARYING              NULL,
     contact_email            CHARACTER VARYING              NULL,
+    context_type             CHARACTER VARYING,
+    context                  BYTEA,
 
     CONSTRAINT chargeback_id_PK PRIMARY KEY (id)
 );
 
-CREATE INDEX chargeback_invoice_payment_idx ON skipper.chargeback (invoice_id, payment_id);
+CREATE UNIQUE INDEX chargeback_invoice_payment_idx ON skipper.chargeback (invoice_id, payment_id, retrieval_request);
 CREATE INDEX chargeback_pretension_date_idx ON skipper.chargeback (pretension_date);
 CREATE INDEX chargeback_shop_idx            ON skipper.chargeback (shop_id);
 
@@ -36,6 +42,8 @@ CREATE TABLE skipper.chargeback_state (
     payment_id               CHARACTER VARYING              NOT NULL,
     stage                    skipper.chargeback_stage       NOT NULL,
     status                   skipper.chargeback_status      NOT NULL,
+    levy_amount              BIGINT                         NULL,
+    body_amount              BIGINT                         NULL,
     created_at               TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     date_of_decision         TIMESTAMP WITHOUT TIME ZONE    NULL,
 
@@ -63,4 +71,3 @@ CREATE TABLE skipper.chargeback_hold_state (
 
 CREATE INDEX chargeback_hold_state_created_idx ON skipper.chargeback_hold_state (created_at, chargeback_id);
 CREATE INDEX chargeback_hold_state_created_and_invoice_idx ON skipper.chargeback_hold_state (created_at, invoice_id, payment_id);
-

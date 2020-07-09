@@ -1,5 +1,6 @@
-package com.rbkmoney.skipper;
+package com.rbkmoney.skipper.unit;
 
+import com.rbkmoney.skipper.SkipperApplication;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
