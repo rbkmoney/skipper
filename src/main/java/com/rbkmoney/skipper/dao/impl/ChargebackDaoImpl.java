@@ -1,8 +1,5 @@
 package com.rbkmoney.skipper.dao.impl;
 
-import com.rbkmoney.reporter.domain.enums.ChargebackCategory;
-import com.rbkmoney.reporter.domain.enums.ChargebackStage;
-import com.rbkmoney.reporter.domain.enums.ChargebackStatus;
 import com.rbkmoney.reporter.domain.tables.pojos.Chargeback;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackHoldState;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
@@ -12,14 +9,16 @@ import com.rbkmoney.reporter.domain.tables.records.ChargebackStateRecord;
 import com.rbkmoney.skipper.dao.AbstractGenericDao;
 import com.rbkmoney.skipper.dao.ChargebackDao;
 import com.rbkmoney.skipper.dao.RecordRowMapper;
+import com.rbkmoney.skipper.model.SearchFilter;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Query;
+import org.jooq.Record;
+import org.jooq.SelectConditionStep;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static com.rbkmoney.reporter.domain.Tables.*;
@@ -49,7 +48,8 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
                 .set(record)
                 .onConflict(CHARGEBACK.INVOICE_ID, CHARGEBACK.PAYMENT_ID, CHARGEBACK.RETRIEVAL_REQUEST)
                 .doUpdate()
-                .set(record);
+                .set(record)
+                .returning(CHARGEBACK.ID);
 
         GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
         executeWithReturn(query, keyHolder);
@@ -65,62 +65,59 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
     }
 
     @Override
-    public Chargeback getChargeback(String invoiceId, String paymentId) {
+    public Chargeback getChargeback(String invoiceId, String paymentId, boolean isRetrieval) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK)
                 .where(CHARGEBACK.INVOICE_ID.eq(invoiceId))
                 .and(CHARGEBACK.PAYMENT_ID.eq(paymentId))
-                .and(CHARGEBACK.RETRIEVAL_REQUEST.eq(false));
+                .and(CHARGEBACK.RETRIEVAL_REQUEST.eq(isRetrieval));
         return fetchOne(query, chargebackRowMapper);
     }
 
     @Override
-    public List<Chargeback> getChargebacksByDate(LocalDateTime dateFrom, LocalDateTime dateTo) {
-        Query query = getDslContext()
-                .selectFrom(CHARGEBACK)
-                .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(dateFrom))
-                .and(CHARGEBACK.PRETENSION_DATE.lessOrEqual(dateTo));
-        return fetch(query, chargebackRowMapper);
-    }
+    public List<Chargeback> getChargebacks(SearchFilter searchFilter) {
+        SelectConditionStep<Record> chargebackQuery;
+        boolean isStagesEmpty = searchFilter.getStages() == null;
+        boolean isStatusesEmpty = searchFilter.getStatuses() == null;
+        if (!isStagesEmpty || !isStatusesEmpty) {
+            if (!isStagesEmpty && isStatusesEmpty) {
+                chargebackQuery = getDslContext()
+                        .select(CHARGEBACK.fields())
+                        .from(CHARGEBACK)
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .and(CHARGEBACK_STATE.STAGE.in(searchFilter.getStages()))
+                        .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
+            } else if (isStagesEmpty && !isStatusesEmpty) {
+                chargebackQuery = getDslContext()
+                        .select(CHARGEBACK.fields())
+                        .from(CHARGEBACK)
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .and(CHARGEBACK_STATE.STATUS.in(searchFilter.getStatuses()))
+                        .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
+            } else {
+                chargebackQuery = getDslContext()
+                        .select(CHARGEBACK.fields())
+                        .from(CHARGEBACK)
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .and(CHARGEBACK_STATE.STAGE.in(searchFilter.getStages()))
+                        .and(CHARGEBACK_STATE.STATUS.in(searchFilter.getStatuses()))
+                        .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
+            }
+        } else {
+            chargebackQuery = getDslContext()
+                    .select()
+                    .from(CHARGEBACK)
+                    .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
+        }
 
-    @Override
-    public List<Chargeback> getChargebacksByProvider(String providerId,
-                                                     LocalDateTime dateFrom,
-                                                     LocalDateTime dateTo) {
-        Query query = getDslContext()
-                .selectFrom(CHARGEBACK)
-                .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(dateFrom))
-                .and(CHARGEBACK.PRETENSION_DATE.lessOrEqual(dateTo))
-                .and(CHARGEBACK.PROVIDER_ID.eq(providerId));
-        return fetch(query, chargebackRowMapper);
-    }
+        if (searchFilter.getDateTo() != null) {
+            chargebackQuery.and(CHARGEBACK.PRETENSION_DATE.lessOrEqual(searchFilter.getDateTo()));
+        }
+        if (searchFilter.getProviderId() != null) {
+            chargebackQuery.and(CHARGEBACK.PROVIDER_ID.eq(searchFilter.getProviderId()));
+        }
 
-    @Override
-    public List<Chargeback> getChargebacksByCategory(List<ChargebackCategory> categories,
-                                                     LocalDateTime dateFrom,
-                                                     LocalDateTime dateTo) {
-        Query query = getDslContext()
-                .selectFrom(CHARGEBACK)
-                .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(dateFrom))
-                .and(CHARGEBACK.PRETENSION_DATE.lessOrEqual(dateTo))
-                .and(CHARGEBACK.CHARGEBACK_CATEGORY.in(categories));
-        return fetch(query, chargebackRowMapper);
-    }
-
-    @Override
-    public List<Chargeback> getChargebacksByStep(LocalDateTime dateFrom,
-                                                 LocalDateTime dateTo,
-                                                 ChargebackStage stage,
-                                                 ChargebackStatus status) {
-        Query query = getDslContext()
-                .select()
-                .from(CHARGEBACK)
-                .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
-                    .and(CHARGEBACK_STATE.STAGE.eq(stage))
-                    .and(CHARGEBACK_STATE.STATUS.eq(status))
-                .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(dateFrom))
-                .and(CHARGEBACK.PRETENSION_DATE.lessOrEqual(dateTo));
-        return fetch(query, chargebackRowMapper);
+        return fetch(chargebackQuery, chargebackRowMapper);
     }
 
     @Override
@@ -145,7 +142,8 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK_STATE)
                 .where(CHARGEBACK_STATE.INVOICE_ID.eq(invoiceId))
-                .and(CHARGEBACK_STATE.PAYMENT_ID.eq(paymentId));
+                .and(CHARGEBACK_STATE.PAYMENT_ID.eq(paymentId))
+                .orderBy(CHARGEBACK_STATE.CREATED_AT.desc());
         return fetch(query, chargebackStateRowMapper);
     }
 

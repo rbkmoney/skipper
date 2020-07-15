@@ -7,7 +7,7 @@ CREATE TABLE skipper.chargeback (
     invoice_id               CHARACTER VARYING              NOT NULL,
     payment_id               CHARACTER VARYING              NOT NULL,
     external_id              CHARACTER VARYING              NULL,
-    retrieval_request         BOOLEAN                        NOT NULL,
+    retrieval_request        BOOLEAN                        NOT NULL,
     pretension_date          TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     operation_date           TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     levy_amount              BIGINT                         NOT NULL,

@@ -1,5 +1,6 @@
 package com.rbkmoney.skipper.endpoint;
 
+import com.rbkmoney.damsel.skipper.SkipperSrv;
 import com.rbkmoney.woody.thrift.impl.http.THServiceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -12,15 +13,14 @@ public class SkipperEndpoint extends GenericServlet {
 
     private transient Servlet thriftServlet;
 
-    //TODO: add
-    //@Autowired
-    //private transient SkipperSrv.Iface clearingServiceHandler;
+    @Autowired
+    private transient SkipperSrv.Iface skipperService;
 
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
-        //thriftServlet = new THServiceBuilder()
-        //        .build(SkipperSrv.Iface.class, clearingServiceHandler);
+        thriftServlet = new THServiceBuilder()
+                .build(SkipperSrv.Iface.class, skipperService);
     }
 
     @Override

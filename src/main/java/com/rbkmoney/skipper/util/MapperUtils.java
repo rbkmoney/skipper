@@ -12,9 +12,11 @@ import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
 import com.rbkmoney.skipper.exception.UnsupportedCategoryException;
 import com.rbkmoney.skipper.exception.UnsupportedStageException;
 import com.rbkmoney.skipper.exception.UnsupportedStatusException;
+import com.rbkmoney.skipper.model.SearchFilter;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +28,7 @@ import static com.rbkmoney.reporter.domain.enums.ChargebackStatus.*;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class MapperUtils {
 
-    public static Chargeback transformToChargeback(ChargebackGeneralData creationData) {
+    public static Chargeback mapToChargeback(ChargebackGeneralData creationData) {
         Chargeback chargeback = new Chargeback();
         chargeback.setInvoiceId(creationData.getInvoiceId());
         chargeback.setPaymentId(creationData.getPaymentId());
@@ -57,27 +59,24 @@ public final class MapperUtils {
         chargeback.setShopUrl(creationData.getShopUrl());
         chargeback.setPartyEmail(creationData.getPartyEmail());
         chargeback.setContactEmail(creationData.getContactEmail());
-        chargeback.setContextType(creationData.getContent().getType());
-        chargeback.setContext(creationData.getContent().getData());
+        var content = creationData.getContent();
+        if (content != null) {
+            chargeback.setContextType(content.getType());
+            chargeback.setContext(content.getData());
+        }
         return chargeback;
     }
 
-    public static ChargebackState transformToChargebackState(ChargebackStatusChangeEvent event,
-                                                             long chargebackId) {
+    public static ChargebackState mapToChargebackState(ChargebackStatusChangeEvent event,
+                                                       ChargebackState prevState,
+                                                       long chargebackId) {
         ChargebackState state = new ChargebackState();
         state.setChargebackId(chargebackId);
         state.setInvoiceId(event.getInvoiceId());
         state.setPaymentId(event.getPaymentId());
-        ChargebackStage stage = event.getStage();
-        if (stage.isSetChargeback()) {
-            state.setStage(CHARGEBACK);
-        } else if (stage.isSetPreArbitration()) {
-            state.setStage(PRE_ARBITRATION);
-        } else if (stage.isSetArbitration()) {
-            state.setStage(ARBITRATION);
-        } else {
-            throw new UnsupportedStageException();
-        }
+        state.setStage(prevState.getStage());
+        state.setBodyAmount(prevState.getBodyAmount());
+        state.setLevyAmount(prevState.getLevyAmount());
         ChargebackStatus status = event.getStatus();
         if (status.isSetPending()) {
             state.setStatus(PENDING);
@@ -88,7 +87,10 @@ public final class MapperUtils {
             state.setBodyAmount(accepted.getBodyAmount());
         } else if (status.isSetRejected()) {
             state.setStatus(REJECTED);
-            state.setLevyAmount(status.getRejected().getLevyAmount());
+            if (status.getRejected().isSetLevyAmount()) {
+                state.setLevyAmount(status.getRejected().getLevyAmount());
+                state.setBodyAmount(null);
+            }
         } else if (status.isSetCancelled()) {
             state.setStatus(CANCELLED);
         } else {
@@ -96,24 +98,68 @@ public final class MapperUtils {
         }
 
         state.setCreatedAt(TypeUtil.stringToLocalDateTime(event.getCreatedAt()));
-        state.setDateOfDecision(TypeUtil.stringToLocalDateTime(event.getDateOfDecision()));
+        if (event.getDateOfDecision() != null) {
+            state.setDateOfDecision(TypeUtil.stringToLocalDateTime(event.getDateOfDecision()));
+        }
         return state;
     }
 
-    public static ChargebackHoldState transformChargebackHoldState(ChargebackHoldStatusChangeEvent event,
+    public static ChargebackState transformReopenToChargebackState(ChargebackReopenEvent event,
+                                                                   ChargebackState prevState,
                                                                    long chargebackId) {
+        ChargebackState state = new ChargebackState();
+        state.setChargebackId(chargebackId);
+        state.setInvoiceId(event.getInvoiceId());
+        state.setPaymentId(event.getPaymentId());
+        state.setStatus(PENDING);
+        state.setCreatedAt(TypeUtil.stringToLocalDateTime(event.getCreatedAt()));
+
+        if (event.isSetLevyAmount()) {
+            state.setLevyAmount(event.getLevyAmount());
+        } else {
+            state.setLevyAmount(prevState.getLevyAmount());
+        }
+        if (event.isSetBodyAmount()) {
+            state.setBodyAmount(event.getBodyAmount());
+        } else {
+            state.setBodyAmount(prevState.getBodyAmount());
+        }
+        if (!event.isSetReopenStage()) {
+            var chargebackStage = prevState.getStage();
+            if (chargebackStage == CHARGEBACK) {
+                state.setStage(PRE_ARBITRATION);
+            } else {
+                state.setStage(ARBITRATION);
+            }
+        } else {
+            ChargebackStage reopenStage = event.getReopenStage();
+            if (reopenStage.isSetPreArbitration()) {
+                state.setStage(PRE_ARBITRATION);
+            } else if (reopenStage.isSetArbitration()) {
+                state.setStage(ARBITRATION);
+            } else {
+                throw new UnsupportedStageException();
+            }
+        }
+
+        return state;
+    }
+
+    public static ChargebackHoldState mapToChargebackHoldState(ChargebackHoldStatusChangeEvent event,
+                                                               long chargebackId) {
         ChargebackHoldState holdState = new ChargebackHoldState();
         holdState.setChargebackId(chargebackId);
         holdState.setInvoiceId(event.getInvoiceId());
         holdState.setPaymentId(event.getPaymentId());
         holdState.setCreatedAt(TypeUtil.stringToLocalDateTime(event.getCreatedAt()));
-        holdState.setWillHoldFromMerchant(event.isWillHoldFromMerchant());
-        holdState.setWasHoldFromMerchant(event.isWasHoldFromMerchant());
-        holdState.setHoldFromUs(event.isHoldFromUs());
+        ChargebackHoldStatus holdStatus = event.getHoldStatus();
+        holdState.setWillHoldFromMerchant(holdStatus.isWillHoldFromMerchant());
+        holdState.setWasHoldFromMerchant(holdStatus.isWasHoldFromMerchant());
+        holdState.setHoldFromUs(holdStatus.isHoldFromUs());
         return holdState;
     }
 
-    public static InvoicePaymentChargebackParams transformToInvoicePaymentChargebackParams(
+    public static InvoicePaymentChargebackParams mapToInvoicePaymentChargebackParams(
             ChargebackGeneralData creationData,
             long chargebackId
     ) {
@@ -134,9 +180,9 @@ public final class MapperUtils {
         return params;
     }
 
-    public static ChargebackData transformToChargebackData(Chargeback chargeback,
-                                                           List<ChargebackState> chargebackStates,
-                                                           List<ChargebackHoldState> chargebackHoldStates) {
+    public static ChargebackData mapToChargebackData(Chargeback chargeback,
+                                                     List<ChargebackState> chargebackStates,
+                                                     List<ChargebackHoldState> chargebackHoldStates) {
         ChargebackData data = new ChargebackData();
         data.setId(String.valueOf(chargeback.getId()));
         List<ChargebackEvent> events = new ArrayList<>();
@@ -156,9 +202,9 @@ public final class MapperUtils {
         ChargebackCreateEvent createEvent = new ChargebackCreateEvent();
         ChargebackGeneralData generalData = new ChargebackGeneralData();
 
-        generalData.setPretensionDate(chargeback.getPretensionDate().toInstant(ZoneOffset.UTC).toString());
+        generalData.setPretensionDate(localDateTimeToString(chargeback.getPretensionDate()));
         generalData.setProviderId(chargeback.getProviderId());
-        generalData.setOperationDate(chargeback.getOperationDate().toInstant(ZoneOffset.UTC).toString());
+        generalData.setOperationDate(localDateTimeToString(chargeback.getOperationDate()));
         generalData.setInvoiceId(chargeback.getInvoiceId());
         generalData.setPaymentId(chargeback.getPaymentId());
         generalData.setRrn(chargeback.getRrn());
@@ -195,7 +241,7 @@ public final class MapperUtils {
         var content = new com.rbkmoney.damsel.skipper.Content();
         content.setData(content.getData());
         content.setType(content.getType());
-        generalData.setContent(content);
+        generalData.setContent(content.getType() == null ? null : content);
         generalData.setRetrievalRequest(chargeback.getRetrievalRequest());
 
         createEvent.setCreationData(generalData);
@@ -233,8 +279,12 @@ public final class MapperUtils {
                 break;
             case ACCEPTED:
                 ChargebackAccepted accepted = new ChargebackAccepted();
-                accepted.setBodyAmount(chargeback.getBodyAmount());
-                accepted.setLevyAmount(chargeback.getLevyAmount());
+                if (chargeback.getLevyAmount() != null) {
+                    accepted.setLevyAmount(chargeback.getLevyAmount());
+                }
+                if (chargeback.getBodyAmount() != null) {
+                    accepted.setBodyAmount(chargeback.getBodyAmount());
+                }
                 chargebackStatus.setAccepted(accepted);
                 break;
             case CANCELLED:
@@ -242,8 +292,12 @@ public final class MapperUtils {
                 break;
             case REJECTED:
                 ChargebackRejected rejected = new ChargebackRejected();
-                rejected.setLevyAmount(chargeback.getLevyAmount());
-                rejected.setBodyAmount(chargeback.getBodyAmount());
+                if (chargeback.getLevyAmount() != null) {
+                    rejected.setLevyAmount(chargeback.getLevyAmount());
+                }
+                if (chargeback.getBodyAmount() != null) {
+                    rejected.setBodyAmount(chargeback.getBodyAmount());
+                }
                 chargebackStatus.setRejected(rejected);
                 break;
             default:
@@ -251,8 +305,10 @@ public final class MapperUtils {
         }
         statusChangeEvent.setStatus(chargebackStatus);
 
-        statusChangeEvent.setCreatedAt(chargeback.getCreatedAt().toInstant(ZoneOffset.UTC).toString());
-        statusChangeEvent.setDateOfDecision(chargeback.getDateOfDecision().toInstant(ZoneOffset.UTC).toString());
+        statusChangeEvent.setCreatedAt(localDateTimeToString(chargeback.getCreatedAt()));
+        if (chargeback.getDateOfDecision() != null) {
+            statusChangeEvent.setDateOfDecision(localDateTimeToString(chargeback.getDateOfDecision()));
+        }
         event.setStatusChangeEvent(statusChangeEvent);
         return event;
     }
@@ -262,12 +318,79 @@ public final class MapperUtils {
         ChargebackHoldStatusChangeEvent holdStatusChangeEvent = new ChargebackHoldStatusChangeEvent();
         holdStatusChangeEvent.setInvoiceId(chargeback.getInvoiceId());
         holdStatusChangeEvent.setPaymentId(chargeback.getPaymentId());
-        holdStatusChangeEvent.setCreatedAt(chargeback.getCreatedAt().toInstant(ZoneOffset.UTC).toString());
-        holdStatusChangeEvent.setWillHoldFromMerchant(chargeback.getWillHoldFromMerchant());
-        holdStatusChangeEvent.setWasHoldFromMerchant(chargeback.getWasHoldFromMerchant());
-        holdStatusChangeEvent.setHoldFromUs(chargeback.getHoldFromUs());
+        holdStatusChangeEvent.setCreatedAt(localDateTimeToString(chargeback.getCreatedAt()));
+        ChargebackHoldStatus holdStatus = new ChargebackHoldStatus();
+        holdStatus.setWillHoldFromMerchant(chargeback.getWillHoldFromMerchant());
+        holdStatus.setWasHoldFromMerchant(chargeback.getWasHoldFromMerchant());
+        holdStatus.setHoldFromUs(chargeback.getHoldFromUs());
+        holdStatusChangeEvent.setHoldStatus(holdStatus);
         event.setHoldStatusChangeEvent(holdStatusChangeEvent);
         return event;
+    }
+
+    public static List<com.rbkmoney.reporter.domain.enums.ChargebackStage> transformChargebackStages(
+            List<ChargebackStage> stages
+    ) {
+        List<com.rbkmoney.reporter.domain.enums.ChargebackStage> chargebackStageList = new ArrayList<>();
+        for (ChargebackStage stage : stages) {
+            chargebackStageList.add(transformChargebackStage(stage));
+        }
+        return chargebackStageList;
+    }
+
+    public static com.rbkmoney.reporter.domain.enums.ChargebackStage transformChargebackStage(ChargebackStage stage) {
+        if (stage.isSetChargeback()) {
+            return CHARGEBACK;
+        } else if (stage.isSetPreArbitration()) {
+            return PRE_ARBITRATION;
+        } else if (stage.isSetArbitration()) {
+            return ARBITRATION;
+        } else {
+            throw new UnsupportedStageException();
+        }
+    }
+
+    public static List<com.rbkmoney.reporter.domain.enums.ChargebackStatus> transformChargebackStatuses(
+            List<ChargebackStatus> statuses
+    ) {
+        List<com.rbkmoney.reporter.domain.enums.ChargebackStatus> chargebackStatuses = new ArrayList<>();
+        for (ChargebackStatus status : statuses) {
+            chargebackStatuses.add(transformChargebackStatus(status));
+        }
+        return chargebackStatuses;
+    }
+
+    public static com.rbkmoney.reporter.domain.enums.ChargebackStatus transformChargebackStatus(
+            ChargebackStatus status
+    ) {
+        if (status.isSetAccepted()) {
+            return ACCEPTED;
+        } else if (status.isSetRejected()) {
+            return REJECTED;
+        } else if (status.isSetCancelled()) {
+            return CANCELLED;
+        } else if (status.isSetPending()) {
+            return PENDING;
+        } else {
+            throw new UnsupportedStatusException();
+        }
+    }
+
+    public static SearchFilter mapToSearchFilter(ChargebackFilter chargebackFilter) {
+        SearchFilter searchFilter = new SearchFilter();
+        searchFilter.setDateFrom(TypeUtil.stringToLocalDateTime(chargebackFilter.getDateFrom()));
+        searchFilter.setDateTo(chargebackFilter.getDateTo() == null ?
+                null : TypeUtil.stringToLocalDateTime(chargebackFilter.getDateTo()));
+        searchFilter.setProviderId(chargebackFilter.getProviderId());
+        searchFilter.setStatuses(chargebackFilter.getStatuses() == null ?
+                null : transformChargebackStatuses(chargebackFilter.getStatuses()));
+        searchFilter.setStages(chargebackFilter.getStages() == null ?
+                null : transformChargebackStages(chargebackFilter.getStages()));
+        return searchFilter;
+    }
+
+    public static String localDateTimeToString(LocalDateTime dateTime) {
+        return dateTime.toInstant(ZoneOffset.UTC).toString();
     }
 
 }

@@ -1,13 +1,10 @@
 package com.rbkmoney.skipper.dao;
 
-import com.rbkmoney.reporter.domain.enums.ChargebackCategory;
-import com.rbkmoney.reporter.domain.enums.ChargebackStage;
-import com.rbkmoney.reporter.domain.enums.ChargebackStatus;
 import com.rbkmoney.reporter.domain.tables.pojos.Chargeback;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackHoldState;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
+import com.rbkmoney.skipper.model.SearchFilter;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ChargebackDao {
@@ -16,20 +13,9 @@ public interface ChargebackDao {
 
     Chargeback getChargeback(long chargebackId);
 
-    Chargeback getChargeback(String invoiceId, String paymentId);
+    Chargeback getChargeback(String invoiceId, String paymentId, boolean isRetrieval);
 
-    List<Chargeback> getChargebacksByDate(LocalDateTime dateFrom, LocalDateTime dateTo);
-
-    List<Chargeback> getChargebacksByProvider(String providerId, LocalDateTime dateFrom, LocalDateTime dateTo);
-
-    List<Chargeback> getChargebacksByCategory(List<ChargebackCategory> categories,
-                                              LocalDateTime dateFrom,
-                                              LocalDateTime dateTo);
-
-    List<Chargeback> getChargebacksByStep(LocalDateTime dateFrom,
-                                          LocalDateTime dateTo,
-                                          ChargebackStage stage,
-                                          ChargebackStatus status);
+    List<Chargeback> getChargebacks(SearchFilter searchFilter);
 
     void saveChargebackState(ChargebackState state);
 

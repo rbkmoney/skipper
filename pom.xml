@@ -45,7 +45,7 @@
         <db.embedded.port>15432</db.embedded.port>
         <db.embedded.url>jdbc:postgresql://localhost:${db.embedded.port}/${db.embedded.name}</db.embedded.url>
 
-        <skipper-proto.version>1.4-4968ff8</skipper-proto.version>
+        <skipper-proto.version>1.6-8c89688</skipper-proto.version>
     </properties>
 
     <dependencies>
@@ -94,6 +94,11 @@
             <groupId>com.rbkmoney</groupId>
             <artifactId>skipper-proto</artifactId>
             <version>${skipper-proto.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney.maven.plugins</groupId>
+            <artifactId>pg-embedded-plugin</artifactId>
+            <version>1.4</version>
         </dependency>
 
         <!--spring-->
