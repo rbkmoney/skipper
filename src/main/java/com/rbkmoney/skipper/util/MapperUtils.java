@@ -32,11 +32,14 @@ public final class MapperUtils {
         Chargeback chargeback = new Chargeback();
         chargeback.setInvoiceId(creationData.getInvoiceId());
         chargeback.setPaymentId(creationData.getPaymentId());
+        chargeback.setChargebackId(creationData.getChargebackId());
         chargeback.setRetrievalRequest(creationData.isRetrievalRequest());
         chargeback.setPretensionDate(TypeUtil.stringToLocalDateTime(creationData.getPretensionDate()));
         chargeback.setOperationDate(TypeUtil.stringToLocalDateTime(creationData.getOperationDate()));
         chargeback.setLevyAmount(creationData.getLevyAmount());
-        chargeback.setBodyAmount(creationData.getBodyAmount());
+        if (creationData.isSetBodyAmount()) {
+            chargeback.setBodyAmount(creationData.getBodyAmount());
+        }
         chargeback.setCurrency(creationData.getCurrency());
         chargeback.setShopId(creationData.getShopId());
         ChargebackReason chargebackReason = creationData.getChargebackReason();
@@ -69,27 +72,32 @@ public final class MapperUtils {
 
     public static ChargebackState mapToChargebackState(ChargebackStatusChangeEvent event,
                                                        ChargebackState prevState,
-                                                       long chargebackId) {
+                                                       long extId) {
         ChargebackState state = new ChargebackState();
-        state.setChargebackId(chargebackId);
+        state.setExtId(extId);
         state.setInvoiceId(event.getInvoiceId());
         state.setPaymentId(event.getPaymentId());
+        state.setChargebackId(event.getChargebackId());
         state.setStage(prevState.getStage());
-        state.setBodyAmount(prevState.getBodyAmount());
-        state.setLevyAmount(prevState.getLevyAmount());
+        //state.setBodyAmount(prevState.getBodyAmount());
+        //state.setLevyAmount(prevState.getLevyAmount());
         ChargebackStatus status = event.getStatus();
         if (status.isSetPending()) {
             state.setStatus(PENDING);
         } else if (status.isSetAccepted()) {
             state.setStatus(ACCEPTED);
             ChargebackAccepted accepted = status.getAccepted();
-            state.setLevyAmount(accepted.getLevyAmount());
-            state.setBodyAmount(accepted.getBodyAmount());
+            if (accepted.isSetLevyAmount()) {
+                state.setLevyAmount(accepted.getLevyAmount());
+            }
+            if (accepted.isSetBodyAmount()) {
+                state.setBodyAmount(accepted.getBodyAmount());
+            }
         } else if (status.isSetRejected()) {
             state.setStatus(REJECTED);
-            if (status.getRejected().isSetLevyAmount()) {
-                state.setLevyAmount(status.getRejected().getLevyAmount());
-                state.setBodyAmount(null);
+            ChargebackRejected rejected = status.getRejected();
+            if (rejected.isSetLevyAmount()) {
+                state.setLevyAmount(rejected.getLevyAmount());
             }
         } else if (status.isSetCancelled()) {
             state.setStatus(CANCELLED);
@@ -106,11 +114,12 @@ public final class MapperUtils {
 
     public static ChargebackState transformReopenToChargebackState(ChargebackReopenEvent event,
                                                                    ChargebackState prevState,
-                                                                   long chargebackId) {
+                                                                   long extId) {
         ChargebackState state = new ChargebackState();
-        state.setChargebackId(chargebackId);
+        state.setExtId(extId);
         state.setInvoiceId(event.getInvoiceId());
         state.setPaymentId(event.getPaymentId());
+        state.setChargebackId(event.getChargebackId());
         state.setStatus(PENDING);
         state.setCreatedAt(TypeUtil.stringToLocalDateTime(event.getCreatedAt()));
 
@@ -146,11 +155,12 @@ public final class MapperUtils {
     }
 
     public static ChargebackHoldState mapToChargebackHoldState(ChargebackHoldStatusChangeEvent event,
-                                                               long chargebackId) {
+                                                               long extId) {
         ChargebackHoldState holdState = new ChargebackHoldState();
-        holdState.setChargebackId(chargebackId);
+        holdState.setExtId(extId);
         holdState.setInvoiceId(event.getInvoiceId());
         holdState.setPaymentId(event.getPaymentId());
+        holdState.setChargebackId(event.getChargebackId());
         holdState.setCreatedAt(TypeUtil.stringToLocalDateTime(event.getCreatedAt()));
         ChargebackHoldStatus holdStatus = event.getHoldStatus();
         holdState.setWillHoldFromMerchant(holdStatus.isWillHoldFromMerchant());
@@ -160,11 +170,10 @@ public final class MapperUtils {
     }
 
     public static InvoicePaymentChargebackParams mapToInvoicePaymentChargebackParams(
-            ChargebackGeneralData creationData,
-            long chargebackId
+            ChargebackGeneralData creationData
     ) {
         InvoicePaymentChargebackParams params = new InvoicePaymentChargebackParams();
-        params.setId(String.valueOf(chargebackId));
+        params.setId(creationData.getChargebackId());
         params.setExternalId(creationData.getExternalId());
         params.setBody(creationData.getBodyAmount() != 0 ?
                 new Cash()
@@ -197,7 +206,7 @@ public final class MapperUtils {
         return data;
     }
 
-    private static ChargebackEvent transformToGeneralDataEvent(Chargeback chargeback) {
+    public static ChargebackEvent transformToGeneralDataEvent(Chargeback chargeback) {
         ChargebackEvent event = new ChargebackEvent();
         ChargebackCreateEvent createEvent = new ChargebackCreateEvent();
         ChargebackGeneralData generalData = new ChargebackGeneralData();
@@ -207,10 +216,13 @@ public final class MapperUtils {
         generalData.setOperationDate(localDateTimeToString(chargeback.getOperationDate()));
         generalData.setInvoiceId(chargeback.getInvoiceId());
         generalData.setPaymentId(chargeback.getPaymentId());
+        generalData.setChargebackId(chargeback.getChargebackId());
         generalData.setRrn(chargeback.getRrn());
         generalData.setMaskedPan(chargeback.getMaskedPan());
         generalData.setLevyAmount(chargeback.getLevyAmount());
-        generalData.setBodyAmount(chargeback.getBodyAmount());
+        if (chargeback.getBodyAmount() != null) {
+            generalData.setBodyAmount(chargeback.getBodyAmount());
+        }
         generalData.setCurrency(chargeback.getCurrency());
         generalData.setShopId(chargeback.getShopId());
         generalData.setPartyEmail(chargeback.getPartyEmail());
@@ -254,6 +266,7 @@ public final class MapperUtils {
         ChargebackStatusChangeEvent statusChangeEvent = new ChargebackStatusChangeEvent();
         statusChangeEvent.setInvoiceId(chargeback.getInvoiceId());
         statusChangeEvent.setPaymentId(chargeback.getPaymentId());
+        statusChangeEvent.setChargebackId(chargeback.getChargebackId());
         var stage = chargeback.getStage();
         ChargebackStage chargebackStage = new ChargebackStage();
         switch (stage) {
@@ -318,6 +331,7 @@ public final class MapperUtils {
         ChargebackHoldStatusChangeEvent holdStatusChangeEvent = new ChargebackHoldStatusChangeEvent();
         holdStatusChangeEvent.setInvoiceId(chargeback.getInvoiceId());
         holdStatusChangeEvent.setPaymentId(chargeback.getPaymentId());
+        holdStatusChangeEvent.setChargebackId(chargeback.getChargebackId());
         holdStatusChangeEvent.setCreatedAt(localDateTimeToString(chargeback.getCreatedAt()));
         ChargebackHoldStatus holdStatus = new ChargebackHoldStatus();
         holdStatus.setWillHoldFromMerchant(chargeback.getWillHoldFromMerchant());

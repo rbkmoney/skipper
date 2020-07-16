@@ -6,9 +6,11 @@ import com.rbkmoney.damsel.payment_processing.InvoicingSrv;
 import com.rbkmoney.damsel.skipper.ChargebackEvent;
 import com.rbkmoney.damsel.skipper.ChargebackReopenEvent;
 import com.rbkmoney.damsel.skipper.ChargebackStage;
+import com.rbkmoney.reporter.domain.enums.ChargebackStatus;
 import com.rbkmoney.reporter.domain.tables.pojos.Chargeback;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
 import com.rbkmoney.skipper.dao.ChargebackDao;
+import com.rbkmoney.skipper.exception.BusinessException;
 import com.rbkmoney.skipper.exception.NotFoundException;
 import com.rbkmoney.skipper.exception.UnsupportedStageException;
 import com.rbkmoney.skipper.util.MapperUtils;
@@ -36,25 +38,43 @@ public class ReopenChargebackEventHandler implements EventHandler {
         ChargebackReopenEvent reopenEvent = event.getReopenEvent();
         String invoiceId = reopenEvent.getInvoiceId();
         String paymentId = reopenEvent.getPaymentId();
-        log.info("Processing new reopen chargeback event (invoice id = {}, payment id = {})",
-                invoiceId, paymentId);
-        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, false);
-        Long chargebackId = chargeback.getId();
-        saveReopenEventToDatabase(reopenEvent, chargebackId);
+        String chargebackId = reopenEvent.getChargebackId();
+        log.info("Processing new reopen chargeback event (invoice id = {}, payment id = {}, chatgebackId = {})",
+                invoiceId, paymentId, chargebackId);
+        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, chargebackId, false);
+        if (chargeback == null) {
+            log.error("Source chargeback for reopen operation not found! (invoice id = {}, " +
+                    "payment id = {}, chargeback id = {})", invoiceId, paymentId, chargebackId);
+            throw new NotFoundException(String.format("Source chargeback for reopen operation not found! " +
+                    "(invoice id = %s, payment id = %s, chargeback id = %s)", invoiceId, paymentId, chargebackId));
+        }
+        Long extId = chargeback.getId();
+        saveReopenEventToDatabase(reopenEvent, extId);
         sendReopenEventToHellgate(reopenEvent, chargeback);
-        log.info("New reopen chargeback event was processed (chargebackId = {}, invoice id = {}, payment id = {})",
-                chargebackId, invoiceId, paymentId);
+        log.info("New reopen chargeback event was processed (extId = {}, invoice id = {}, " +
+                        "payment id = {}, chatgebackId = {})",
+                extId, invoiceId, paymentId, chargebackId);
     }
 
-    private void saveReopenEventToDatabase(ChargebackReopenEvent reopenEvent, long chargebackId) {
+    private void saveReopenEventToDatabase(ChargebackReopenEvent reopenEvent, long extId) {
         String invoiceId = reopenEvent.getInvoiceId();
         String paymentId = reopenEvent.getPaymentId();
-        List<ChargebackState> states = chargebackDao.getChargebackStates(invoiceId, paymentId);
+        String chargebackId = reopenEvent.getChargebackId();
+        List<ChargebackState> states = chargebackDao.getChargebackStates(invoiceId, paymentId, chargebackId);
         ChargebackState prevState = states.stream()
                 .max(Comparator.comparing(ChargebackState::getCreatedAt))
                 .orElseThrow(() -> new NotFoundException());
         ChargebackState chargebackState =
-                MapperUtils.transformReopenToChargebackState(reopenEvent, prevState, chargebackId);
+                MapperUtils.transformReopenToChargebackState(reopenEvent, prevState, extId);
+        if (prevState.getStage() == chargebackState.getStage()) {
+            throw new BusinessException(String.format("The stage of the processed event is equal to previous event " +
+                    "(current: '%s', previous: '%s')", chargebackState.toString(), prevState.toString()));
+        }
+        if (prevState.getStatus() != ChargebackStatus.REJECTED) {
+            throw new BusinessException(String.format("The stage can be reopen only from REJECTED status " +
+                    "(invoice id = %s, payment id = %s, chargeback id = %s)", invoiceId, paymentId, chargebackId));
+        }
+
         chargebackDao.saveChargebackState(chargebackState);
     }
 

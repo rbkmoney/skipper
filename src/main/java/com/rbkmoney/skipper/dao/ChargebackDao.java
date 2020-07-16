@@ -11,22 +11,22 @@ public interface ChargebackDao {
 
     long saveChargeback(Chargeback chargeback);
 
-    Chargeback getChargeback(long chargebackId);
+    Chargeback getChargeback(long id);
 
-    Chargeback getChargeback(String invoiceId, String paymentId, boolean isRetrieval);
+    Chargeback getChargeback(String invoiceId, String paymentId, String chargebackId, boolean isRetrieval);
 
     List<Chargeback> getChargebacks(SearchFilter searchFilter);
 
     void saveChargebackState(ChargebackState state);
 
-    List<ChargebackState> getChargebackStates(long chargebackId);
+    List<ChargebackState> getChargebackStates(long extId);
 
-    List<ChargebackState> getChargebackStates(String invoiceId, String paymentId);
+    List<ChargebackState> getChargebackStates(String invoiceId, String paymentId, String chargebackId);
 
     void saveChargebackHoldState(ChargebackHoldState holdState);
 
-    List<ChargebackHoldState> getChargebackHoldStates(long chargebackId);
+    List<ChargebackHoldState> getChargebackHoldStates(long extId);
 
-    List<ChargebackHoldState> getChargebackHoldStates(String invoiceId, String paymentId);
+    List<ChargebackHoldState> getChargebackHoldStates(String invoiceId, String paymentId, String chargebackId);
 
 }

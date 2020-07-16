@@ -4,6 +4,7 @@ import com.opentable.db.postgres.embedded.EmbeddedPostgres;
 import com.rbkmoney.skipper.SkipperApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.util.TestPropertyValues;
@@ -13,7 +14,6 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringRunner;
 
-import javax.sql.DataSource;
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
@@ -30,7 +30,7 @@ import static org.springframework.boot.test.util.TestPropertyValues.Type.MAP;
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 @ContextConfiguration(classes = {SkipperApplication.class},
         initializers = AbstractIntegrationTest.Initializer.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 public abstract class AbstractIntegrationTest {
 
     private static final int PORT = 15432;
@@ -45,8 +45,16 @@ public abstract class AbstractIntegrationTest {
 
     private static EmbeddedPostgres postgres;
 
+    @Before
+    public void setup() {
+        if (postgres == null) {
+            startPgServer();
+            createDatabase();
+        }
+    }
+
     @After
-    public void destroy() throws IOException {
+    public void destroy() throws IOException, SQLException {
         if (postgres != null) {
             postgres.close();
             postgres = null;
@@ -86,10 +94,6 @@ public abstract class AbstractIntegrationTest {
         String dir = "target" + File.separator + "pgdata_" + currentDate;
         log.info("Postgres source files in {}", dir);
         return dir;
-    }
-
-    private DataSource getDataSource() {
-        return postgres.getDatabase(DB_USER, DB_NAME);
     }
 
     public static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {

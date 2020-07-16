@@ -8,6 +8,8 @@ import com.rbkmoney.reporter.domain.tables.pojos.Chargeback;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackHoldState;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
 import com.rbkmoney.skipper.dao.ChargebackDao;
+import com.rbkmoney.skipper.exception.DaoException;
+import com.rbkmoney.skipper.exception.NotFoundException;
 import com.rbkmoney.skipper.handler.EventHandler;
 import com.rbkmoney.skipper.model.SearchFilter;
 import com.rbkmoney.skipper.util.MapperUtils;
@@ -36,29 +38,44 @@ public class SkipperService implements SkipperSrv.Iface {
     @SneakyThrows
     @Override
     public void processChargebackData(ChargebackEvent event) throws TException {
-        if (event.isSetCreateEvent()) {
-            createChargebackEventHandler.handle(event);
-        } else if (event.isSetStatusChangeEvent()) {
-            chargebackStatusChangeEventHandler.handle(event);
-        } else if (event.isSetHoldStatusChangeEvent()) {
-            chargebackHoldStatusChangeEventHandler.handle(event);
-        } else if (event.isSetReopenEvent()) {
-            reopenChargebackEventHandler.handle(event);
-        } else {
-            throw new UnsupportedOperationException("Events with type '" + event.getSetField().getFieldName() +
-                    "' unsupported");
+        try {
+            if (event.isSetCreateEvent()) {
+                createChargebackEventHandler.handle(event);
+            } else if (event.isSetStatusChangeEvent()) {
+                chargebackStatusChangeEventHandler.handle(event);
+            } else if (event.isSetHoldStatusChangeEvent()) {
+                chargebackHoldStatusChangeEventHandler.handle(event);
+            } else if (event.isSetReopenEvent()) {
+                reopenChargebackEventHandler.handle(event);
+            } else {
+                throw new UnsupportedOperationException("Events with type '" + event.getSetField().getFieldName() +
+                        "' unsupported");
+            }
+        } catch (DaoException ex) {
+            log.error("Error received when saving data to the database", ex);
+            throw ex;
+        } catch (NotFoundException ex) {
+            log.error("Not found source data", ex);
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Error received when processing event data", ex);
+            throw ex;
         }
     }
 
     @Override
-    public ChargebackData getChargebackData(String invoiceId, String paymentId) throws TException {
-        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, false);
+    public ChargebackData getChargebackData(String invoiceId,
+                                            String paymentId,
+                                            String chargebackId) throws TException {
+        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, chargebackId, false);
         return getChargebackDataByChargeback(chargeback);
     }
 
     @Override
-    public ChargebackData getRetrievalRequestData(String invoiceId, String paymentId) throws TException {
-        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, true);
+    public ChargebackData getRetrievalRequestData(String invoiceId,
+                                                  String paymentId,
+                                                  String chargebackId) throws TException {
+        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, chargebackId, true);
         return getChargebackDataByChargeback(chargeback);
     }
 

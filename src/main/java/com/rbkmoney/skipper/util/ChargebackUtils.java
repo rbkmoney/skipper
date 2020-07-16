@@ -14,11 +14,12 @@ import static com.rbkmoney.reporter.domain.enums.ChargebackStatus.PENDING;
 public final class ChargebackUtils {
 
     public static ChargebackState createPendingState(ChargebackGeneralData creationData,
-                                                     long chargebackId) {
+                                                     long extId) {
         ChargebackState state = new ChargebackState();
-        state.setChargebackId(chargebackId);
+        state.setExtId(extId);
         state.setInvoiceId(creationData.getInvoiceId());
         state.setPaymentId(creationData.getPaymentId());
+        state.setChargebackId(creationData.getChargebackId());
         state.setLevyAmount(creationData.getLevyAmount());
         state.setBodyAmount(creationData.getBodyAmount());
         state.setCreatedAt(TypeUtil.stringToLocalDateTime(creationData.getOperationDate()));
@@ -28,11 +29,12 @@ public final class ChargebackUtils {
     }
 
     public static ChargebackHoldState createEmptyHoldState(ChargebackGeneralData creationData,
-                                                           long chargebackId) {
+                                                           long extId) {
         ChargebackHoldState holdState = new ChargebackHoldState();
-        holdState.setChargebackId(chargebackId);
+        holdState.setExtId(extId);
         holdState.setInvoiceId(creationData.getInvoiceId());
         holdState.setPaymentId(creationData.getPaymentId());
+        holdState.setChargebackId(creationData.getChargebackId());
         holdState.setCreatedAt(TypeUtil.stringToLocalDateTime(creationData.getOperationDate()));
         holdState.setWillHoldFromMerchant(false);
         holdState.setWasHoldFromMerchant(false);

@@ -46,9 +46,6 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
         Query query = getDslContext()
                 .insertInto(CHARGEBACK)
                 .set(record)
-                .onConflict(CHARGEBACK.INVOICE_ID, CHARGEBACK.PAYMENT_ID, CHARGEBACK.RETRIEVAL_REQUEST)
-                .doUpdate()
-                .set(record)
                 .returning(CHARGEBACK.ID);
 
         GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
@@ -57,19 +54,20 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
     }
 
     @Override
-    public Chargeback getChargeback(long chargebackId) {
+    public Chargeback getChargeback(long id) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK)
-                .where(CHARGEBACK.ID.eq(chargebackId));
+                .where(CHARGEBACK.ID.eq(id));
         return fetchOne(query, chargebackRowMapper);
     }
 
     @Override
-    public Chargeback getChargeback(String invoiceId, String paymentId, boolean isRetrieval) {
+    public Chargeback getChargeback(String invoiceId, String paymentId, String chargebackId, boolean isRetrieval) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK)
                 .where(CHARGEBACK.INVOICE_ID.eq(invoiceId))
                 .and(CHARGEBACK.PAYMENT_ID.eq(paymentId))
+                .and(CHARGEBACK.CHARGEBACK_ID.eq(chargebackId))
                 .and(CHARGEBACK.RETRIEVAL_REQUEST.eq(isRetrieval));
         return fetchOne(query, chargebackRowMapper);
     }
@@ -84,21 +82,21 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
                 chargebackQuery = getDslContext()
                         .select(CHARGEBACK.fields())
                         .from(CHARGEBACK)
-                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.EXT_ID.eq(CHARGEBACK.ID))
                         .and(CHARGEBACK_STATE.STAGE.in(searchFilter.getStages()))
                         .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
             } else if (isStagesEmpty && !isStatusesEmpty) {
                 chargebackQuery = getDslContext()
                         .select(CHARGEBACK.fields())
                         .from(CHARGEBACK)
-                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.EXT_ID.eq(CHARGEBACK.ID))
                         .and(CHARGEBACK_STATE.STATUS.in(searchFilter.getStatuses()))
                         .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
             } else {
                 chargebackQuery = getDslContext()
                         .select(CHARGEBACK.fields())
                         .from(CHARGEBACK)
-                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.CHARGEBACK_ID.eq(CHARGEBACK.ID))
+                        .join(CHARGEBACK_STATE).on(CHARGEBACK_STATE.EXT_ID.eq(CHARGEBACK.ID))
                         .and(CHARGEBACK_STATE.STAGE.in(searchFilter.getStages()))
                         .and(CHARGEBACK_STATE.STATUS.in(searchFilter.getStatuses()))
                         .where(CHARGEBACK.PRETENSION_DATE.greaterOrEqual(searchFilter.getDateFrom()));
@@ -130,19 +128,20 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
     }
 
     @Override
-    public List<ChargebackState> getChargebackStates(long chargebackId) {
+    public List<ChargebackState> getChargebackStates(long extId) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK_STATE)
-                .where(CHARGEBACK_STATE.CHARGEBACK_ID.eq(chargebackId));
+                .where(CHARGEBACK_STATE.EXT_ID.eq(extId));
         return fetch(query, chargebackStateRowMapper);
     }
 
     @Override
-    public List<ChargebackState> getChargebackStates(String invoiceId, String paymentId) {
+    public List<ChargebackState> getChargebackStates(String invoiceId, String paymentId, String chargebackId) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK_STATE)
                 .where(CHARGEBACK_STATE.INVOICE_ID.eq(invoiceId))
                 .and(CHARGEBACK_STATE.PAYMENT_ID.eq(paymentId))
+                .and(CHARGEBACK_STATE.CHARGEBACK_ID.eq(chargebackId))
                 .orderBy(CHARGEBACK_STATE.CREATED_AT.desc());
         return fetch(query, chargebackStateRowMapper);
     }
@@ -157,19 +156,20 @@ public class ChargebackDaoImpl extends AbstractGenericDao implements ChargebackD
     }
 
     @Override
-    public List<ChargebackHoldState> getChargebackHoldStates(long chargebackId) {
+    public List<ChargebackHoldState> getChargebackHoldStates(long extId) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK_HOLD_STATE)
-                .where(CHARGEBACK_HOLD_STATE.CHARGEBACK_ID.eq(chargebackId));
+                .where(CHARGEBACK_HOLD_STATE.EXT_ID.eq(extId));
         return fetch(query, chargebackHoldStateRowMapper);
     }
 
     @Override
-    public List<ChargebackHoldState> getChargebackHoldStates(String invoiceId, String paymentId) {
+    public List<ChargebackHoldState> getChargebackHoldStates(String invoiceId, String paymentId, String chargebackId) {
         Query query = getDslContext()
                 .selectFrom(CHARGEBACK_HOLD_STATE)
                 .where(CHARGEBACK_HOLD_STATE.INVOICE_ID.eq(invoiceId))
-                .and(CHARGEBACK_HOLD_STATE.PAYMENT_ID.eq(paymentId));
+                .and(CHARGEBACK_HOLD_STATE.PAYMENT_ID.eq(paymentId))
+                .and(CHARGEBACK_HOLD_STATE.CHARGEBACK_ID.eq(chargebackId));
         return fetch(query, chargebackHoldStateRowMapper);
     }
 }

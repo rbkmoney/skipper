@@ -7,6 +7,7 @@ import com.rbkmoney.damsel.skipper.*;
 import com.rbkmoney.reporter.domain.tables.pojos.Chargeback;
 import com.rbkmoney.reporter.domain.tables.pojos.ChargebackState;
 import com.rbkmoney.skipper.dao.ChargebackDao;
+import com.rbkmoney.skipper.exception.BusinessException;
 import com.rbkmoney.skipper.exception.NotFoundException;
 import com.rbkmoney.skipper.util.MapperUtils;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.util.Comparator;
 import java.util.List;
 
+import static com.rbkmoney.reporter.domain.enums.ChargebackStatus.PENDING;
 import static com.rbkmoney.skipper.util.HellgateUtils.USER_INFO;
 
 @Slf4j
@@ -33,13 +35,26 @@ public class ChargebackStatusChangeEventHandler implements EventHandler {
         var statusChangeEvent = event.getStatusChangeEvent();
         String invoiceId = statusChangeEvent.getInvoiceId();
         String paymentId = statusChangeEvent.getPaymentId();
-        log.info("Processing new chargeback status change event (invoice id = {}, payment id = {})",
-                invoiceId, paymentId);
-        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, false);
+        String chargebackId = statusChangeEvent.getChargebackId();
+        log.info("Processing new chargeback status change event (invoice id = {}, payment id = {}, chargeback id = {})",
+                invoiceId, paymentId, chargebackId);
+        Chargeback chargeback = chargebackDao.getChargeback(invoiceId, paymentId, chargebackId, false);
+        if (chargeback == null) {
+            log.error("Source chargeback for status change operation not found! (invoice id = {}, " +
+                            "payment id = {}, chargeback id = {})", invoiceId, paymentId, chargebackId);
+            throw new NotFoundException(String.format("Source chargeback for status change operation not found! " +
+                    "(invoice id = %s, payment id = %s, chargeback id = %s)", invoiceId, paymentId, chargebackId));
+        }
         List<ChargebackState> chargebackStates = chargebackDao.getChargebackStates(chargeback.getId());
         ChargebackState prevState = chargebackStates.stream()
                 .max(Comparator.comparing(ChargebackState::getCreatedAt))
                 .orElseThrow(() -> new NotFoundException());
+        if (prevState.getStatus() != PENDING) {
+            log.error("Status change error. Previous state must be pending (invoice id = {}, payment id = {}, " +
+                            "chargeback id = {})", invoiceId, paymentId, chargebackId);
+            throw new BusinessException(String.format("Status change error. Previous state must be pending " +
+                    "(invoice id = %s, payment id = %s, chargeback id = %s)", invoiceId, paymentId, chargebackId));
+        }
         ChargebackState chargebackState =
                 MapperUtils.mapToChargebackState(statusChangeEvent, prevState, chargeback.getId());
         chargebackDao.saveChargebackState(chargebackState);
@@ -53,7 +68,7 @@ public class ChargebackStatusChangeEventHandler implements EventHandler {
         String invoiceId = statusChangeEvent.getInvoiceId();
         String paymentId = statusChangeEvent.getPaymentId();
         String occuredAt = MapperUtils.localDateTimeToString(chargebackState.getCreatedAt());
-        String chargebackId = String.valueOf(chargeback.getId());
+        String chargebackId = statusChangeEvent.getChargebackId();
         ChargebackStatus status = statusChangeEvent.getStatus();
         if (status.isSetAccepted()) {
             ChargebackAccepted accepted = status.getAccepted();

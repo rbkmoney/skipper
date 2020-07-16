@@ -18,12 +18,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.rbkmoney.skipper.util.ChargebackTestUtils.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-public class SkipperIntegrationTest extends AbstractIntegrationTest {
+public class SuccessBehaviorIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private SkipperSrv.Iface skipperService;
@@ -44,10 +45,11 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
     public void createNewChargebackTest() throws TException {
         String invoiceId = "inv_1";
         String paymentId = "pay_1";
+        String chargebackId = "ch_1";
         String providerId = "pr_1";
-        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, providerId, true));
-        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, providerId, false));
-        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId);
+        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, chargebackId, providerId, true));
+        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, chargebackId, providerId, false));
+        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId, chargebackId);
         assertEquals("Count of events aren't equal to expected", 3, chargebackData.getEvents().size());
         List<ChargebackEvent> chargebackEvents = chargebackData.getEvents().stream()
                 .filter(ChargebackEvent::isSetCreateEvent)
@@ -64,16 +66,21 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
     public void changeChargebackStatusTest() throws TException {
         String invoiceId = "inv_2";
         String paymentId = "pay_2";
+        String chargebackId = "ch_2";
         String providerId = "pr_1";
-        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, providerId, false));
+        skipperService.processChargebackData(
+                createChargebackTestEvent(invoiceId, paymentId, chargebackId, providerId, false)
+        );
 
         ChargebackStage stage_1 = new ChargebackStage();
         stage_1.setChargeback(new StageChargeback());                        //stage - chargeback
         ChargebackStatus status_1 = new ChargebackStatus();
         status_1.setRejected(new ChargebackRejected().setLevyAmount(1000L)); //status - rejected
-        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, stage_1, status_1));
+        skipperService.processChargebackData(
+                createChargebackStatusChangeTestEvent(invoiceId, paymentId, chargebackId, stage_1, status_1)
+        );
 
-        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId);
+        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId, chargebackId);
         assertEquals("Count of events aren't equal to expected", 4, chargebackData.getEvents().size());
         List<ChargebackEvent> chargebackEvents = chargebackData.getEvents().stream()
                 .filter(ChargebackEvent::isSetStatusChangeEvent)
@@ -82,9 +89,12 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
 
         ChargebackStage reopenStage = new ChargebackStage();
         reopenStage.setArbitration(new StageArbitration());
-        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, reopenStage));
-        ChargebackData chargebackDataAfterReopen = skipperService.getChargebackData(invoiceId, paymentId);
-        assertEquals("Count of events after reopen aren't equal to expected", 5, chargebackDataAfterReopen.getEvents().size());
+        skipperService.processChargebackData(
+                createChargebackStatusChangeTestEvent(invoiceId, paymentId, chargebackId, reopenStage)
+        );
+        ChargebackData chargebackDataAfterReopen = skipperService.getChargebackData(invoiceId, paymentId, chargebackId);
+        assertEquals("Count of events after reopen aren't equal to expected",
+                5, chargebackDataAfterReopen.getEvents().size());
         List<ChargebackEvent> chargebackEventsAfterReopen = chargebackDataAfterReopen.getEvents().stream()
                 .filter(ChargebackEvent::isSetReopenEvent)
                 .collect(Collectors.toList());
@@ -95,17 +105,18 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
     public void changeChargebackHoldStatusTest() throws TException {
         String invoiceId = "inv_3";
         String paymentId = "pay_3";
+        String chargebackId = "ch_1";
         String providerId = "pr_1";
-        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, providerId, false));
+        skipperService.processChargebackData(createChargebackTestEvent(invoiceId, paymentId, chargebackId, providerId, false));
 
         ChargebackStage stage = new ChargebackStage();
         stage.setChargeback(new StageChargeback());                        //stage - chargeback
         ChargebackStatus status = new ChargebackStatus();
         status.setAccepted(new ChargebackAccepted().setLevyAmount(1000L)); //status - acceptef
-        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, stage, status));
+        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, chargebackId, stage, status));
 
-        skipperService.processChargebackData(createChargebackHoldStatusChangeTestEvent(invoiceId, paymentId));
-        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId);
+        skipperService.processChargebackData(createChargebackHoldStatusChangeTestEvent(invoiceId, paymentId, chargebackId));
+        ChargebackData chargebackData = skipperService.getChargebackData(invoiceId, paymentId, chargebackId);
         assertEquals("Count of events aren't equal to expected", 5, chargebackData.getEvents().size());
 
         List<ChargebackEvent> chargebackHoldEvents = chargebackData.getEvents().stream()
@@ -119,12 +130,12 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
         for (int i = 0; i < 5; i++) {
             ChargebackStatus status = new ChargebackStatus();
             status.setAccepted(new ChargebackAccepted().setLevyAmount(1000L));
-            createTestChargebackFlowData("inv_10" + i, "pay_1", "prov_1", status);
+            createTestChargebackFlowData("inv_10" + i, "pay_1", "ch_1", "prov_1", status);
         }
         for (int i = 0; i < 5; i++) {
             ChargebackStatus status = new ChargebackStatus();
             status.setRejected(new ChargebackRejected().setLevyAmount(900L));
-            createTestChargebackFlowData("inv_20" + i, "pay_1", "prov_2", status);
+            createTestChargebackFlowData("inv_20" + i, "ch_1", "pay_1", "prov_2", status);
         }
 
         ChargebackFilter filterOne = new ChargebackFilter(); //search all records between date
@@ -163,101 +174,16 @@ public class SkipperIntegrationTest extends AbstractIntegrationTest {
 
     private void createTestChargebackFlowData(String invoiceId,
                                               String paymentId,
+                                              String chargebackId,
                                               String providerId,
                                               ChargebackStatus status) throws TException {
         skipperService.processChargebackData(
-                createChargebackTestEvent(invoiceId, paymentId, providerId, false)
+                createChargebackTestEvent(invoiceId, paymentId, chargebackId, providerId, false)
         );
 
         ChargebackStage stage = new ChargebackStage();
-        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, stage, status));
-        skipperService.processChargebackData(createChargebackHoldStatusChangeTestEvent(invoiceId, paymentId));
-    }
-
-    public static ChargebackEvent createChargebackTestEvent(String invoiceId,
-                                                            String paymentId,
-                                                            String providerId,
-                                                            boolean isRetrievalRequest) {
-        ChargebackEvent event = new ChargebackEvent();
-        ChargebackCreateEvent createEvent = new ChargebackCreateEvent();
-
-        ChargebackGeneralData generalData = new ChargebackGeneralData();
-        generalData.setPretensionDate(TEST_DATE);
-        generalData.setProviderId(providerId);
-        generalData.setOperationDate(TEST_DATE);
-        generalData.setInvoiceId(invoiceId);
-        generalData.setPaymentId(paymentId);
-        generalData.setRrn("rrn_001");
-        generalData.setMaskedPan("000000******0000");
-        generalData.setLevyAmount(1000L);
-        generalData.setBodyAmount(1000L);
-        generalData.setCurrency("USD");
-        generalData.setShopUrl("some url");
-        generalData.setPartyEmail("email 1");
-        generalData.setContactEmail("email 2");
-        generalData.setShopId("shop-1");
-        generalData.setExternalId("ext_1");
-        ChargebackReason reason = new ChargebackReason();
-        reason.setCode("11");
-        ChargebackCategory category = new ChargebackCategory();
-        category.setFraud(new ChargebackCategoryFraud());
-        reason.setCategory(category);
-        generalData.setChargebackReason(reason);
-        generalData.setContent(null);
-        generalData.setRetrievalRequest(isRetrievalRequest);
-        createEvent.setCreationData(generalData);
-
-        event.setCreateEvent(createEvent);
-        return event;
-    }
-
-    public static ChargebackEvent createChargebackStatusChangeTestEvent(String invoiceId,
-                                                                        String paymentId,
-                                                                        ChargebackStage stage,
-                                                                        ChargebackStatus status) {
-        ChargebackEvent event = new ChargebackEvent();
-        ChargebackStatusChangeEvent statusChangeEvent = new ChargebackStatusChangeEvent();
-        statusChangeEvent.setInvoiceId(invoiceId);
-        statusChangeEvent.setPaymentId(paymentId);
-        statusChangeEvent.setStage(stage);
-        statusChangeEvent.setStatus(status);
-        statusChangeEvent.setCreatedAt(MapperUtils.localDateTimeToString(LocalDateTime.now()));
-        statusChangeEvent.setDateOfDecision(null);
-        event.setStatusChangeEvent(statusChangeEvent);
-        return event;
-    }
-
-    public static ChargebackEvent createChargebackStatusChangeTestEvent(String invoiceId,
-                                                                        String paymentId,
-                                                                        ChargebackStage stage) {
-        ChargebackEvent event = new ChargebackEvent();
-        ChargebackReopenEvent reopenEvent = new ChargebackReopenEvent();
-        reopenEvent.setInvoiceId(invoiceId);
-        reopenEvent.setPaymentId(paymentId);
-        reopenEvent.setCreatedAt(MapperUtils.localDateTimeToString(LocalDateTime.now()));
-        reopenEvent.setLevyAmount(1100L);
-        reopenEvent.setBodyAmount(1100L);
-        reopenEvent.setReopenStage(stage);
-        event.setReopenEvent(reopenEvent);
-        return event;
-    }
-
-    public static ChargebackEvent createChargebackHoldStatusChangeTestEvent(String invoiceId,
-                                                                            String paymentId) {
-        ChargebackEvent event = new ChargebackEvent();
-        ChargebackHoldStatusChangeEvent holdStatusChangeEvent = new ChargebackHoldStatusChangeEvent();
-
-        holdStatusChangeEvent.setInvoiceId(invoiceId);
-        holdStatusChangeEvent.setPaymentId(paymentId);
-        holdStatusChangeEvent.setCreatedAt(MapperUtils.localDateTimeToString(LocalDateTime.now()));
-        ChargebackHoldStatus status = new ChargebackHoldStatus()
-                .setHoldFromUs(false)
-                .setWillHoldFromMerchant(true)
-                .setWasHoldFromMerchant(true);
-        holdStatusChangeEvent.setHoldStatus(status);
-
-        event.setHoldStatusChangeEvent(holdStatusChangeEvent);
-        return event;
+        skipperService.processChargebackData(createChargebackStatusChangeTestEvent(invoiceId, paymentId, chargebackId, stage, status));
+        skipperService.processChargebackData(createChargebackHoldStatusChangeTestEvent(invoiceId, paymentId, chargebackId));
     }
 
 }

@@ -6,6 +6,7 @@ CREATE TABLE skipper.chargeback (
     id                       BIGSERIAL                      NOT NULL,
     invoice_id               CHARACTER VARYING              NOT NULL,
     payment_id               CHARACTER VARYING              NOT NULL,
+    chargeback_id            CHARACTER VARYING              NOT NULL,
     external_id              CHARACTER VARYING              NULL,
     retrieval_request        BOOLEAN                        NOT NULL,
     pretension_date          TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
@@ -24,11 +25,13 @@ CREATE TABLE skipper.chargeback (
     contact_email            CHARACTER VARYING              NULL,
     context_type             CHARACTER VARYING,
     context                  BYTEA,
+    act_time                 TIMESTAMP WITHOUT TIME ZONE    NOT NULL DEFAULT (now() at time zone 'utc'),
 
     CONSTRAINT chargeback_id_PK PRIMARY KEY (id)
 );
 
-CREATE UNIQUE INDEX chargeback_invoice_payment_idx ON skipper.chargeback (invoice_id, payment_id, retrieval_request);
+CREATE UNIQUE INDEX chargeback_invoice_payment_idx
+    ON skipper.chargeback (invoice_id, payment_id, chargeback_id, retrieval_request);
 CREATE INDEX chargeback_pretension_date_idx ON skipper.chargeback (pretension_date);
 CREATE INDEX chargeback_shop_idx            ON skipper.chargeback (shop_id);
 
@@ -37,37 +40,45 @@ CREATE TYPE skipper.chargeback_status AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED'
 
 CREATE TABLE skipper.chargeback_state (
     id                       BIGSERIAL                      NOT NULL,
-    chargeback_id            BIGINT                         NOT NULL,
+    ext_id                   BIGINT                         NOT NULL,
     invoice_id               CHARACTER VARYING              NOT NULL,
     payment_id               CHARACTER VARYING              NOT NULL,
+    chargeback_id            CHARACTER VARYING              NOT NULL,
     stage                    skipper.chargeback_stage       NOT NULL,
     status                   skipper.chargeback_status      NOT NULL,
     levy_amount              BIGINT                         NULL,
     body_amount              BIGINT                         NULL,
     created_at               TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     date_of_decision         TIMESTAMP WITHOUT TIME ZONE    NULL,
+    act_time                 TIMESTAMP WITHOUT TIME ZONE    NOT NULL DEFAULT (now() at time zone 'utc'),
 
-    CONSTRAINT chargeback_state_id_PK PRIMARY KEY (chargeback_id, id),
-    FOREIGN KEY (chargeback_id) REFERENCES skipper.chargeback (id)
+    CONSTRAINT chargeback_state_id_PK PRIMARY KEY (ext_id, id),
+    FOREIGN KEY (ext_id) REFERENCES skipper.chargeback (id)
 );
 
-CREATE INDEX chargeback_state_invoice_payment_idx  ON skipper.chargeback_state (invoice_id, payment_id, id);
-CREATE INDEX chargeback_state_created_and_invoice_id_idx  ON skipper.chargeback_state (created_at, invoice_id);
+CREATE INDEX chargeback_state_invoice_payment_idx
+    ON skipper.chargeback_state (invoice_id, payment_id, chargeback_id, id);
+CREATE INDEX chargeback_state_created_and_invoice_id_idx
+    ON skipper.chargeback_state (created_at, invoice_id);
 
 
 CREATE TABLE skipper.chargeback_hold_state (
     id                       BIGSERIAL                      NOT NULL,
-    chargeback_id            BIGINT                         NOT NULL,
+    ext_id                   BIGINT                         NOT NULL,
     invoice_id               CHARACTER VARYING              NOT NULL,
     payment_id               CHARACTER VARYING              NOT NULL,
+    chargeback_id            CHARACTER VARYING              NOT NULL,
     created_at               TIMESTAMP WITHOUT TIME ZONE    NOT NULL,
     will_hold_from_merchant  BOOLEAN                        NOT NULL,
     was_hold_from_merchant   BOOLEAN                        NOT NULL,
     hold_from_us             BOOLEAN                        NOT NULL,
+    act_time                 TIMESTAMP WITHOUT TIME ZONE    NOT NULL DEFAULT (now() at time zone 'utc'),
 
-    CONSTRAINT chargeback_hold_state_id_PK PRIMARY KEY (chargeback_id, id),
-    FOREIGN KEY (chargeback_id) REFERENCES skipper.chargeback (id)
+    CONSTRAINT chargeback_hold_state_id_PK PRIMARY KEY (ext_id, id),
+    FOREIGN KEY (ext_id) REFERENCES skipper.chargeback (id)
 );
 
-CREATE INDEX chargeback_hold_state_created_idx ON skipper.chargeback_hold_state (created_at, chargeback_id);
-CREATE INDEX chargeback_hold_state_created_and_invoice_idx ON skipper.chargeback_hold_state (created_at, invoice_id, payment_id);
+CREATE INDEX chargeback_hold_state_created_idx
+    ON skipper.chargeback_hold_state (created_at, ext_id);
+CREATE INDEX chargeback_hold_state_created_and_invoice_idx
+    ON skipper.chargeback_hold_state (created_at, invoice_id, payment_id, chargeback_id);

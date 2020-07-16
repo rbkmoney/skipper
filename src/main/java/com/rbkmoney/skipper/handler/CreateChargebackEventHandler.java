@@ -27,20 +27,21 @@ public class CreateChargebackEventHandler implements EventHandler {
         ChargebackGeneralData creationData = event.getCreateEvent().getCreationData();
         String invoiceId = creationData.getInvoiceId();
         String paymentId = creationData.getPaymentId();
+        String chargebackId = creationData.getChargebackId();
         log.info("Processing new chargeback (invoice id = {}, payment id = {})", invoiceId, paymentId);
         Chargeback chargeback = MapperUtils.mapToChargeback(creationData);
-        long chargebackId = chargebackDao.saveChargeback(chargeback);
-        chargebackDao.saveChargebackState(ChargebackUtils.createPendingState(creationData, chargebackId));
-        chargebackDao.saveChargebackHoldState(ChargebackUtils.createEmptyHoldState(creationData, chargebackId));
-        log.info("New chargeback was saved with id {} (invoice id = {}, payment id = {})",
-                chargebackId, invoiceId, paymentId);
+        long extId = chargebackDao.saveChargeback(chargeback);
+        chargebackDao.saveChargebackState(ChargebackUtils.createPendingState(creationData, extId));
+        chargebackDao.saveChargebackHoldState(ChargebackUtils.createEmptyHoldState(creationData, extId));
+        log.info("New chargeback was saved with id {} (invoice id = {}, payment id = {}, chargeback id = {})",
+                extId, invoiceId, paymentId, chargebackId);
         if (creationData.isRetrievalRequest()) {
             return;
         }
-        var cbParams = MapperUtils.mapToInvoicePaymentChargebackParams(creationData, chargebackId);
+        var cbParams = MapperUtils.mapToInvoicePaymentChargebackParams(creationData);
         var hgChargeback = invoicingService.createChargeback(USER_INFO, invoiceId, paymentId, cbParams);
-        log.info("Chargeback was created in HG (invoice id = {}, payment id = {}). Return info: {}",
-                invoiceId, paymentId, hgChargeback);
+        log.info("Chargeback was created in HG (invoice id = {}, payment id = {}, chargeback id = {}). Return info: {}",
+                invoiceId, paymentId, chargebackId, hgChargeback);
     }
 
 }

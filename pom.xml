@@ -45,7 +45,7 @@
         <db.embedded.port>15432</db.embedded.port>
         <db.embedded.url>jdbc:postgresql://localhost:${db.embedded.port}/${db.embedded.name}</db.embedded.url>
 
-        <skipper-proto.version>1.6-8c89688</skipper-proto.version>
+        <skipper-proto.version>1.8-bc78497</skipper-proto.version>
     </properties>
 
     <dependencies>
