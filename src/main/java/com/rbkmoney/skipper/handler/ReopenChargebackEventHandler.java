@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
@@ -34,6 +35,7 @@ public class ReopenChargebackEventHandler implements EventHandler {
     private final ChargebackDao chargebackDao;
 
     @Override
+    @Transactional
     public void handle(ChargebackEvent event) throws Exception {
         ChargebackReopenEvent reopenEvent = event.getReopenEvent();
         String invoiceId = reopenEvent.getInvoiceId();

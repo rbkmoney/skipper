@@ -10,6 +10,7 @@ import com.rbkmoney.skipper.util.MapperUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import static com.rbkmoney.skipper.util.HellgateUtils.USER_INFO;
 
@@ -23,6 +24,7 @@ public class CreateChargebackEventHandler implements EventHandler {
     private final ChargebackDao chargebackDao;
 
     @Override
+    @Transactional
     public void handle(ChargebackEvent event) throws Exception {
         ChargebackGeneralData creationData = event.getCreateEvent().getCreationData();
         String invoiceId = creationData.getInvoiceId();

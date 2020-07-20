@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
@@ -31,6 +32,7 @@ public class ChargebackStatusChangeEventHandler implements EventHandler {
     private final ChargebackDao chargebackDao;
 
     @Override
+    @Transactional
     public void handle(ChargebackEvent event) throws Exception {
         var statusChangeEvent = event.getStatusChangeEvent();
         String invoiceId = statusChangeEvent.getInvoiceId();
