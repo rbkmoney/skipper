@@ -26,6 +26,26 @@
         <dockerfile.registry>${env.REGISTRY}</dockerfile.registry>
         <shared.resources.version>0.3.6</shared.resources.version>
         <sonar.jacoco.reportPaths>${project.basedir}/target/jacoco.exec</sonar.jacoco.reportPaths>
+        <jooq.version>3.11.7</jooq.version>
+        <flyway.version>5.2.3</flyway.version>
+        <hikari.version>3.1.0</hikari.version>
+        <damsel.version>1.430-a1072d0</damsel.version>
+        <!---->
+        <db.name>skipper</db.name>
+        <db.schema>skipper</db.schema>
+        <db.user>postgres</db.user>
+        <db.password>postgres</db.password>
+        <db.port>5432</db.port>
+        <db.url>jdbc:postgresql://localhost:${db.port}/${db.name}</db.url>
+        <!---->
+        <db.embedded.name>${db.name}</db.embedded.name>
+        <db.embedded.schema>${db.schema}</db.embedded.schema>
+        <db.embedded.user>${db.user}</db.embedded.user>
+        <db.embedded.password>${db.password}</db.embedded.password>
+        <db.embedded.port>15432</db.embedded.port>
+        <db.embedded.url>jdbc:postgresql://localhost:${db.embedded.port}/${db.embedded.name}</db.embedded.url>
+
+        <skipper-proto.version>1.8-bc78497</skipper-proto.version>
     </properties>
 
     <dependencies>
@@ -50,6 +70,36 @@
             <artifactId>shared-resources</artifactId>
             <version>${shared.resources.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.rbkmoney</groupId>
+            <artifactId>db-common-lib</artifactId>
+            <version>0.0.2-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney</groupId>
+            <artifactId>sink-common-lib</artifactId>
+            <version>0.0.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney.geck</groupId>
+            <artifactId>serializer</artifactId>
+            <version>0.6.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney</groupId>
+            <artifactId>damsel</artifactId>
+            <version>${damsel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney</groupId>
+            <artifactId>skipper-proto</artifactId>
+            <version>${skipper-proto.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney.maven.plugins</groupId>
+            <artifactId>pg-embedded-plugin</artifactId>
+            <version>1.4</version>
+        </dependency>
 
         <!--spring-->
         <dependency>
@@ -70,6 +120,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context-support</artifactId>
+        </dependency>
 
         <!--third party-->
         <dependency>
@@ -82,11 +140,48 @@
             <artifactId>lombok</artifactId>
             <version>1.18.4</version>
         </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>${hikari.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq</artifactId>
+            <version>${jooq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.6</version>
+        </dependency>
 
         <!--test-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.benas</groupId>
+            <artifactId>random-beans</artifactId>
+            <version>3.6.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.rbkmoney</groupId>
+            <artifactId>easyway</artifactId>
+            <version>0.3.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -117,7 +212,10 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>2.1.1.RELEASE</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -158,6 +256,106 @@
                         <id>agent</id>
                         <goals>
                             <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>${flyway.version}</version>
+                <configuration>
+                    <url>${db.embedded.url}</url>
+                    <user>${db.embedded.user}</user>
+                    <password>${db.embedded.password}</password>
+                    <schemas>
+                        <schema>${db.embedded.schema}</schema>
+                    </schemas>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${postgresql.version}</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>migrate</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>clean</goal>
+                            <goal>migrate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <version>${jooq.version}</version>
+                <configuration>
+                    <jdbc>
+                        <driver>org.postgresql.Driver</driver>
+                        <url>${db.embedded.url}</url>
+                        <user>${db.embedded.user}</user>
+                        <password>${db.embedded.password}</password>
+                    </jdbc>
+                    <generator>
+                        <generate>
+                            <javaTimeTypes>true</javaTimeTypes>
+                            <pojos>true</pojos>
+                            <pojosEqualsAndHashCode>true</pojosEqualsAndHashCode>
+                            <pojosToString>true</pojosToString>
+                        </generate>
+                        <database>
+                            <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                            <includes>.*</includes>
+                            <excludes>schema_version|flyway_schema_history</excludes>
+                            <inputSchema>${db.schema}</inputSchema>
+                        </database>
+                        <target>
+                            <packageName>com.rbkmoney.reporter.domain</packageName>
+                            <directory>target/generated-sources/jooq/</directory>
+                        </target>
+                    </generator>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>gen-src</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.rbkmoney.maven.plugins</groupId>
+                <artifactId>pg-embedded-plugin</artifactId>
+                <version>1.4</version>
+                <configuration>
+                    <dbName>${db.embedded.name}</dbName>
+                    <schemas>
+                        <schema>${db.embedded.schema}</schema>
+                    </schemas>
+                    <userName>${db.embedded.user}</userName>
+                    <password>${db.embedded.password}</password>
+                    <port>${db.embedded.port}</port>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>PG_server_start</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>start</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>PG_server_stop</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>stop</goal>
                         </goals>
                     </execution>
                 </executions>
